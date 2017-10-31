@@ -175,11 +175,11 @@ export default class ApiAdapter {
         const response = await axios.request(requestConfig);
 
         // attempt to verify the Bunq response
-        // const verifyResult = await this.verifyResponse(response);
-        //
-        // if (!verifyResult) {
-        //     throw new Error("We couldn't verify the received response");
-        // }
+        const verifyResult = await this.verifyResponse(response);
+
+        if (!verifyResult) {
+            throw new Error("We couldn't verify the received response");
+        }
 
         return response;
     }
