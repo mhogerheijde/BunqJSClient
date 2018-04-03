@@ -65,14 +65,52 @@ export const verifyString = async (
     const messageDigest = forgeSha256.create();
     messageDigest.update(data, "utf8");
 
-    try {
-        // decode the base64 signature
-        const rawSignature = forgeUtil.decode64(signature);
+    console.log(data.length, publicKey, signature);
 
-        // verify the signature with the public key
-        return publicKey.verify(messageDigest, rawSignature);
+    // decode the base64 signature
+    const rawSignature = forgeUtil.decode64(signature);
+    const nodeBuffer = Buffer.from(signature, "base64");
+    const forgeBuffer = forge.util.createBuffer(rawSignature);
+    const forgeBuffer2 = forge.util.createBuffer(Buffer.from(signature, "base64"));
+    console.log("rawSignature", rawSignature, typeof rawSignature);
+    console.log("==========");
+    console.log("nodeBuffer", nodeBuffer, typeof nodeBuffer);
+    console.log("==========");
+    console.log("forgeBuffer_", forgeBuffer, typeof forgeBuffer);
+    console.log("==========");
+    console.log("forgeBuffer2", forgeBuffer2, typeof forgeBuffer2);
+
+    try {
+        console.log("rawSignature with default scheme");
+        let result1 = publicKey.verify(messageDigest, rawSignature);
+        console.log(result1);
     } catch (ex) {
-        Logger.debug(ex);
-        return false;
+        Logger.error(ex);
     }
+
+    try {
+        console.log("nodeBuffer with default scheme");
+        let result12 = publicKey.verify(messageDigest, nodeBuffer);
+        console.log(result12);
+    } catch (ex) {
+        Logger.error(ex);
+    }
+
+    try {
+        console.log("forgeBuffer with default scheme");
+        let result2 = publicKey.verify(messageDigest, forgeBuffer);
+        console.log(result2);
+    } catch (ex) {
+        Logger.error(ex);
+    }
+
+    try {
+        console.log("forgeBuffer2 with default scheme");
+        let result3 = publicKey.verify(messageDigest, forgeBuffer2);
+        console.log(result3);
+    } catch (ex) {
+        Logger.error(ex);
+    }
+
+    return false;
 };
