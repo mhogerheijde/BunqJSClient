@@ -1,32 +1,52 @@
 const store = require("store");
+import axios from "axios";
 
 import ApiAdapter from "./ApiAdapter";
 import Session from "./Session";
+import Logger from "./Helpers/Logger";
 import StorageInteface from "./Interfaces/StorageInterface";
+import LoggerInterface from "./Interfaces/LoggerInterface";
 import { publicKeyFromPem } from "./Crypto/Rsa";
 import ApiEndpoints from "./Api/index";
 
+import ErrorCodes from "./Helpers/ErrorCodes";
+
 export default class BunqJSClient {
     public storageInterface: StorageInteface;
+    public logger: LoggerInterface;
     public apiKey: string = null;
     public allowedIps: string[] = [];
 
     public Session: Session;
     public ApiAdapter: ApiAdapter;
 
+    /**
+     * Contains object with all API endpoints
+     */
     public api: any;
 
     /**
-     * @param {StorageInterface} storageInterface
+     * A list of all custom BunqJSClient error codes to make error handling easier
+     * @type {{INSTALLATION_HAS_SESSION}}
      */
-    constructor(storageInterface: StorageInteface = store) {
+    public errorCodes: any = ErrorCodes;
+
+    /**
+     * @param {StorageInterface} storageInterface
+     * @param {LoggerInterface} loggerInterface
+     */
+    constructor(
+        storageInterface: StorageInteface = store,
+        loggerInterface: LoggerInterface = Logger
+    ) {
         this.storageInterface = storageInterface;
+        this.logger = loggerInterface;
 
         // create a new session instance
-        this.Session = new Session(this.storageInterface);
+        this.Session = new Session(this.storageInterface, this.logger);
 
         // setup the api adapter using our session context
-        this.ApiAdapter = new ApiAdapter(this.Session);
+        this.ApiAdapter = new ApiAdapter(this.Session, this.logger);
 
         // register our api endpoints
         this.api = ApiEndpoints(this.ApiAdapter);
@@ -42,6 +62,8 @@ export default class BunqJSClient {
         environment: string = "SANDBOX",
         encryptionKey: string | boolean = false
     ) {
+        this.logger.debug("BunqJSClient run");
+
         this.apiKey = apiKey;
         this.allowedIps = allowedIps;
 
@@ -132,7 +154,25 @@ export default class BunqJSClient {
      */
     public async registerSession() {
         if (this.Session.verifySessionInstallation() === false) {
-            const response = await this.api.sessionServer.add();
+            let response = null;
+            try {
+                response = await this.api.sessionServer.add();
+            } catch (error) {
+                if (error.response && error.response.Error) {
+                    const responseError = error.response.Error[0];
+                    const description = responseError.error_description;
+
+                    this.logger.error("bunq API error: " + description);
+                }
+                throw {
+                    errorCode: this.errorCodes.INSTALLATION_HAS_SESSION,
+                    error: error
+                };
+            }
+
+            this.logger.debug(
+                "response.token.created:" + response.token.created
+            );
 
             // based on account setting we set a expire date
             const createdDate = new Date(response.token.created);
@@ -141,9 +181,17 @@ export default class BunqJSClient {
                     createdDate.getSeconds() +
                         response.user_info.UserCompany.session_timeout
                 );
+                this.logger.debug(
+                    "Received response.user_info.UserCompany.session_timeout from api: " +
+                        response.user_info.UserCompany.session_timeout
+                );
             } else if (response.user_info.UserPerson !== undefined) {
                 createdDate.setSeconds(
                     createdDate.getSeconds() +
+                        response.user_info.UserPerson.session_timeout
+                );
+                this.logger.debug(
+                    "Received response.user_info.UserPerson.session_timeout from api: " +
                         response.user_info.UserPerson.session_timeout
                 );
             } else if (response.user_info.UserLight !== undefined) {
@@ -151,18 +199,76 @@ export default class BunqJSClient {
                     createdDate.getSeconds() +
                         response.user_info.UserLight.session_timeout
                 );
+                this.logger.debug(
+                    "Received response.user_info.UserLight.session_timeout from api: " +
+                        response.user_info.UserLight.session_timeout
+                );
             }
 
             // set the new info
             this.Session.sessionExpiryTime = createdDate;
-            this.Session.sessionId = response.token.id;
+            this.Session.sessionId = response.id;
             this.Session.sessionToken = response.token.token;
+            this.Session.sessionTokenId = response.token.id;
             this.Session.userInfo = response.user_info;
+
+            this.logger.debug("calculated expireDate: " + createdDate);
+            this.logger.debug("calculated current date: " + new Date());
 
             // update storage
             await this.Session.storeSession();
         }
         return true;
+    }
+
+    /**
+     * Create a new credential password ip
+     * @returns {Promise<any>}
+     */
+    public async createCredentials() {
+        const limiter = this.ApiAdapter.RequestLimitFactory.create(
+            "/credential-password-ip-request",
+            "POST"
+        );
+
+        // send a unsigned request to the endpoint to create a new credential password ip
+        const response = await limiter.run(async () =>
+            this.ApiAdapter.post(
+                `https://api.tinker.bunq.com/v1/credential-password-ip-request`,
+                {},
+                {},
+                {
+                    disableSigning: true
+                }
+            )
+        );
+
+        return response.Response[0].UserCredentialPasswordIpRequest;
+    }
+
+    /**
+     * Check if a credential password ip has been accepted
+     * @param {string} uuid
+     * @returns {Promise<any>}
+     */
+    public async checkCredentialStatus(uuid: string) {
+        const limiter = this.ApiAdapter.RequestLimitFactory.create(
+            "/credential-password-ip-request",
+            "GET"
+        );
+
+        // send a unsigned request to the endpoint to create a new credential password ip with the uuid
+        const response = await limiter.run(async () =>
+            this.ApiAdapter.get(
+                `https://api.tinker.bunq.com/v1/credential-password-ip-request/${uuid}`,
+                {},
+                {
+                    disableSigning: true
+                }
+            )
+        );
+
+        return response.Response[0].UserCredentialPasswordIpRequest;
     }
 
     /**
@@ -184,12 +290,13 @@ export default class BunqJSClient {
     }
 
     /**
-     * Returns the registered users for the session
+     * Returns the registered user for the session of a specific type
      * @returns {any}
      */
     public async getUser(userType, updated: boolean = false) {
         if (updated) {
-            // TODO do api call to get updated version for our session
+            // update the user info and update session data
+            this.Session.userInfo = await this.api.user.list();
         }
         // return the user if we have one
         return this.Session.userInfo[userType];
@@ -201,8 +308,10 @@ export default class BunqJSClient {
      */
     public async getUsers(updated: boolean = false) {
         if (updated) {
-            // TODO do api call to get updated version for our session
+            // update the user info and update session data
+            this.Session.userInfo = await this.api.user.list();
         }
+        // return the users
         return this.Session.userInfo;
     }
 }

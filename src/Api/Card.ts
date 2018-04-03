@@ -3,7 +3,7 @@ import Session from "../Session";
 import ApiEndpointInterface from "../Interfaces/ApiEndpointInterface";
 import PaginationOptions from "../Types/PaginationOptions";
 
-export default class MonetaryAccount implements ApiEndpointInterface {
+export default class Card implements ApiEndpointInterface {
     ApiAdapter: ApiAdapter;
     Session: Session;
 
@@ -22,27 +22,27 @@ export default class MonetaryAccount implements ApiEndpointInterface {
      */
     public async get(
         userId: number,
-        monetaryAccountId: number,
+        cardId: number,
         options: any = {}
     ) {
         const limiter = this.ApiAdapter.RequestLimitFactory.create(
-            "/monetary-account",
+            "/card",
             "GET"
         );
 
         const response = await limiter.run(async () =>
             this.ApiAdapter.get(
-                `/v1/user/${userId}/monetary-account/${monetaryAccountId}`
+                `/v1/user/${userId}/card/${cardId}`
             )
         );
 
         // return raw respone image
-        return response.Response[0];
+        return response.Response;
     }
 
     /**
      * @param {number} userId
-     * @param {MonetaryAccountListOptions} options
+     * @param {CardListOptions} options
      * @returns {Promise<void>}
      */
     public async list(
@@ -66,13 +66,13 @@ export default class MonetaryAccount implements ApiEndpointInterface {
         }
 
         const limiter = this.ApiAdapter.RequestLimitFactory.create(
-            "/monetary-account",
+            "/card",
             "LIST"
         );
 
         const response = await limiter.run(async () =>
             this.ApiAdapter.get(
-                `/v1/user/${userId}/monetary-account`,
+                `/v1/user/${userId}/card`,
                 {},
                 {
                     axiosOptions: {

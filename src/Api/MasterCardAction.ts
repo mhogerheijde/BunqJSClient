@@ -3,7 +3,7 @@ import Session from "../Session";
 import ApiEndpointInterface from "../Interfaces/ApiEndpointInterface";
 import PaginationOptions from "../Types/PaginationOptions";
 
-export default class MonetaryAccount implements ApiEndpointInterface {
+export default class MasterCardAction implements ApiEndpointInterface {
     ApiAdapter: ApiAdapter;
     Session: Session;
 
@@ -16,39 +16,41 @@ export default class MonetaryAccount implements ApiEndpointInterface {
     }
 
     /**
-     *
-     * @param options
+     * @param {number} userId
+     * @param {number} monetaryAccountId
+     * @param {number} requestResponseId
      * @returns {Promise<any>}
      */
     public async get(
         userId: number,
         monetaryAccountId: number,
-        options: any = {}
+        masterCardActionId: number
     ) {
         const limiter = this.ApiAdapter.RequestLimitFactory.create(
-            "/monetary-account",
+            "/mastercard-action",
             "GET"
         );
 
         const response = await limiter.run(async () =>
             this.ApiAdapter.get(
-                `/v1/user/${userId}/monetary-account/${monetaryAccountId}`
+                `/v1/user/${userId}/monetary-account/${monetaryAccountId}/mastercard-action/${masterCardActionId}`
             )
         );
 
-        // return raw respone image
         return response.Response[0];
     }
 
     /**
      * @param {number} userId
-     * @param {MonetaryAccountListOptions} options
-     * @returns {Promise<void>}
+     * @param {number} monetaryAccountId
+     * @param {PaymentsListOptions} options
+     * @returns {Promise<any>}
      */
     public async list(
         userId: number,
+        monetaryAccountId: number,
         options: PaginationOptions = {
-            count: 25,
+            count: 50,
             newer_id: false,
             older_id: false
         }
@@ -66,13 +68,13 @@ export default class MonetaryAccount implements ApiEndpointInterface {
         }
 
         const limiter = this.ApiAdapter.RequestLimitFactory.create(
-            "/monetary-account",
+            "/mastercard-action",
             "LIST"
         );
 
         const response = await limiter.run(async () =>
             this.ApiAdapter.get(
-                `/v1/user/${userId}/monetary-account`,
+                `/v1/user/${userId}/monetary-account/${monetaryAccountId}/mastercard-action`,
                 {},
                 {
                     axiosOptions: {

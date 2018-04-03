@@ -1,4 +1,4 @@
-# BunqJSClient
+# BunqJSClient ![build status for master branch](https://api.travis-ci.org/BunqCommunity/BunqJSClient.svg?branch=master) [![Coverage Status](https://coveralls.io/repos/github/BunqCommunity/BunqJSClient/badge.svg?branch=)](https://coveralls.io/github/BunqCommunity/BunqJSClient?branch=)
 A web based project that is aimed at allowing single page applications to do all interactions with Bunq without proxying through other services. 
 All data is stored client-side and requests are created and signed using [forge](https://github.com/digitalbazaar/forge).
 
@@ -62,18 +62,4 @@ const userCompany = await BunqClient.getUser("UserCompany", forceUpdate);
 ```
 
 ## Supported APIs
-#### Installation/setup
-- [POST /v1/installation](https://doc.bunq.com/api/1/call/installation/method/post)
-- [POST /v1/device-server](https://doc.bunq.com/api/1/call/installation/method/post)
-- [POST /v1/session-server](https://doc.bunq.com/api/1/call/session-server/method/post)
-
-#### Attachements
-- [GET /attachment-public/{imageUUID}/content](https://doc.bunq.com/api/1/call/attachment-public-content/method/list)
-
-#### Payments
-- [GET /v1/user/${userId}/monetary-account/${monetaryAccountId}/payment/${paymentId}](https://doc.bunq.com/api/1/call/payment/method/get)
-- [LIST /v1/user/${userId}/monetary-account/${monetaryAccountId}/payment](https://doc.bunq.com/api/1/call/payment/method/list)
-
-#### MonetaryAccounts
-- [GET /v1/user/{userId}/monetary-account/{monetaryAccountId}](https://doc.bunq.com/api/1/call/monetary-account/method/get)
-- [LIST /v1/user/{userId}/monetary-account](https://doc.bunq.com/api/1/call/monetary-account/method/list)
+For more details look into the endpoints found at `src/Api/*`

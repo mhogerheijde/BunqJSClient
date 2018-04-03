@@ -16,6 +16,23 @@ export const stringToHash = async (string: string) => {
 };
 
 /**
+ * Encrypts a string using a publicKey
+ * @param {string} data
+ * @param publicKey
+ * @returns {Promise<string>}
+ */
+export const encryptString = async (data: string, publicKey: any) => {
+    // create a new message digest for our string
+    const messageDigest = forgeSha256.create();
+    messageDigest.update(data, "utf8");
+
+    // sign it with a private key
+    const signatureBytes = publicKey.encrypt(messageDigest);
+    // encode to base 64 and return it
+    return forgeUtil.encode64(signatureBytes);
+};
+
+/**
  * Signs a string using a privateKey
  * @param {string} data
  * @param privateKey
@@ -48,16 +65,14 @@ export const verifyString = async (
     const messageDigest = forgeSha256.create();
     messageDigest.update(data, "utf8");
 
-    // decode the base64 signature
-    const rawSignature = forgeUtil.decode64(signature);
-
     try {
+        // decode the base64 signature
+        const rawSignature = forgeUtil.decode64(signature);
+
         // verify the signature with the public key
-        const verified = publicKey.verify(messageDigest, rawSignature);
-        Logger.debug(verified);
-        return true;
+        return publicKey.verify(messageDigest, rawSignature);
     } catch (ex) {
-        Logger.error(ex);
+        Logger.debug(ex);
         return false;
     }
 };

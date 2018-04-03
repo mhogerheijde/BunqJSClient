@@ -1,16 +1,11 @@
 import ApiAdapter from "../ApiAdapter";
 import Session from "../Session";
 import ApiEndpointInterface from "../Interfaces/ApiEndpointInterface";
-import CounterpartyAlias from "../Types/CounterpartyAlias";
 import Amount from "../Types/Amount";
+import CounterpartyAlias from "../Types/CounterpartyAlias";
+import PaginationOptions from "../Types/PaginationOptions";
 
-type PaymentsListOptions = {
-    count: number;
-    newer_id: number | false;
-    older_id: number | false;
-};
-
-export default class Payments implements ApiEndpointInterface {
+export default class Payment implements ApiEndpointInterface {
     ApiAdapter: ApiAdapter;
     Session: Session;
 
@@ -35,12 +30,15 @@ export default class Payments implements ApiEndpointInterface {
         paymentId: number,
         options: any = {}
     ) {
-        const response = await this.ApiAdapter.get(
-            `/v1/user/${userId}/monetary-account/${monetaryAccountId}/payment/${paymentId}`
+        const limiter = this.ApiAdapter.RequestLimitFactory.create("/payment");
+
+        const response = await limiter.run(async () =>
+            this.ApiAdapter.get(
+                `/v1/user/${userId}/monetary-account/${monetaryAccountId}/payment/${paymentId}`
+            )
         );
 
-        // return raw respone image
-        return response.Response[0].Payment;
+        return response.Response[0];
     }
 
     /**
@@ -52,31 +50,39 @@ export default class Payments implements ApiEndpointInterface {
     public async list(
         userId: number,
         monetaryAccountId: number,
-        options: PaymentsListOptions = {
+        options: PaginationOptions = {
             count: 50,
             newer_id: false,
             older_id: false
         }
     ) {
-        const params: any = {
-            count: options.count
-        };
+        const params: any = {};
 
-        if (options.newer_id !== false) {
+        if (options.count !== undefined) {
+            params.count = options.count;
+        }
+        if (options.newer_id !== false && options.newer_id !== undefined) {
             params.newer_id = options.newer_id;
         }
-        if (options.older_id !== false) {
+        if (options.older_id !== false && options.older_id !== undefined) {
             params.older_id = options.older_id;
         }
 
-        const response = await this.ApiAdapter.get(
-            `/v1/user/${userId}/monetary-account/${monetaryAccountId}/payment`,
-            {},
-            {
-                axiosOptions: {
-                    params: params
+        const limiter = this.ApiAdapter.RequestLimitFactory.create(
+            "/payment",
+            "LIST"
+        );
+
+        const response = await limiter.run(async () =>
+            this.ApiAdapter.get(
+                `/v1/user/${userId}/monetary-account/${monetaryAccountId}/payment`,
+                {},
+                {
+                    axiosOptions: {
+                        params: params
+                    }
                 }
-            }
+            )
         );
 
         // return raw respone image
@@ -100,13 +106,20 @@ export default class Payments implements ApiEndpointInterface {
         counterpartyAlias: CounterpartyAlias,
         options: any = {}
     ) {
-        const response = await this.ApiAdapter.post(
-            `/v1/user/${userId}/monetary-account/${monetaryAccountId}/payment`,
-            {
-                counterparty_alias: counterpartyAlias,
-                description: description,
-                amount: amount
-            }
+        const limiter = this.ApiAdapter.RequestLimitFactory.create(
+            "/payment",
+            "POST"
+        );
+
+        const response = await limiter.run(async () =>
+            this.ApiAdapter.post(
+                `/v1/user/${userId}/monetary-account/${monetaryAccountId}/payment`,
+                {
+                    counterparty_alias: counterpartyAlias,
+                    description: description,
+                    amount: amount
+                }
+            )
         );
 
         // return raw respone image

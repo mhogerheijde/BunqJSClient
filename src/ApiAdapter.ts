@@ -1,10 +1,17 @@
 import axios from "axios";
+const forge = require("./Crypto/CustomForge");
 import { AxiosRequestConfig } from "axios";
 import * as Url from "url";
-import { signString, verifyString } from "./Crypto/Sha256";
+import {
+    encryptString as encryptStringRsa,
+    signString,
+    verifyString
+} from "./Crypto/Sha256";
 import Session from "./Session";
 import Header from "./Types/Header";
 import { ucfirst } from "./Helpers/Utils";
+import RequestLimitFactory from "./RequestLimitFactory";
+import LoggerInterface from "./Interfaces/LoggerInterface";
 
 // these headers are set by default
 export const DEFAULT_HEADERS: Header = {
@@ -16,24 +23,24 @@ export const DEFAULT_HEADERS: Header = {
 };
 
 export default class ApiAdapter {
-    Session: Session;
-    language: string;
-    region: string;
-    geoLocation: string;
+    public logger: LoggerInterface;
+    public Session: Session;
+    public RequestLimitFactory: RequestLimitFactory;
+    public language: string;
+    public region: string;
+    public geoLocation: string;
 
-    constructor(Session: Session) {
+    constructor(Session: Session, loggerInterface: LoggerInterface) {
         this.Session = Session;
+        this.logger = loggerInterface;
+        this.RequestLimitFactory = new RequestLimitFactory();
 
         this.language = "en_US";
         this.region = "nl_NL";
         this.geoLocation = "0 0 0 0 000";
     }
 
-    public async setup(){
-        // const location = await getGeoLocation();
-        // this.geoLocation = `${location.latitude} ${location.longitude} 12 100 ${this
-        //     .region}`;
-    }
+    public async setup() {}
 
     /**
      * @param {string} url
@@ -157,10 +164,14 @@ export default class ApiAdapter {
             ...options.axiosOptions
         };
 
+        if (options.isEncrypted === true) {
+            requestConfig = await this.encryptRequest(requestConfig, options);
+        }
+
         // // check if signing is disabled
         if (options.disableSigning !== true) {
             // sign this request config
-            const signature = await this.signRequest(requestConfig);
+            const signature = await this.signRequest(requestConfig, options);
             // add the generated signature
             requestConfig.headers["X-Bunq-Client-Signature"] = signature;
         }
@@ -185,15 +196,75 @@ export default class ApiAdapter {
     }
 
     /**
+     * Encrypts the body and adds the required headers to the request config
+     * @param {AxiosRequestConfig} requestConfig
+     * @param options
+     * @returns {Promise<AxiosRequestConfig>}
+     */
+    private async encryptRequest(
+        requestConfig: AxiosRequestConfig,
+        options: any
+    ): Promise<AxiosRequestConfig> {
+        return requestConfig;
+
+        // TODO test and implement actual encryption
+
+        // const body = JSON.stringify(requestConfig.data);
+        // const iv = forge.random.getBytesSync(16);
+        // const key = forge.random.getBytesSync(32);
+        // const encryptedAesKey = await encryptStringRsa(
+        //     key,
+        //     this.Session.serverPublicKey
+        // );
+        //
+        // // create a new aes-cbc cipher with our key
+        // const cipher = forge.cipher.createCipher("AES-CBC", key);
+        // // turn our string into a buffer
+        // const buffer = forge.util.createBuffer(body, "utf8");
+        // cipher.start({ iv: iv });
+        // cipher.update(buffer);
+        // cipher.finish();
+        // const encryptedBody = cipher.output.getBytes();
+        //
+        // // create an hmac buffer with the body and key
+        // const hmac = forge.hmac.create();
+        // const keyBuffer = forge.util.createBuffer(key, "raw");
+        // hmac.start("sha1", keyBuffer);
+        // hmac.update(iv + body);
+        // const hmacBuffer = hmac.digest();
+        //
+        // const base64Hmac = forge.util.encode64(hmacBuffer);
+        // const base64Iv = forge.util.encode64(iv);
+        //
+        // // update the requestconfig
+        // requestConfig.data = encryptedBody;
+        // requestConfig.headers = {
+        //     ...requestConfig.headers,
+        //     "X-Bunq-Client-Encryption-Hmac": base64Hmac,
+        //     "X-Bunq-Client-Encryption-Key": encryptedAesKey,
+        //     "X-Bunq-Client-Encryption-Iv": base64Iv
+        // };
+        //
+        // return requestConfig;
+    }
+
+    /**
      * Signs a request using our privatekey
      * @param {RequestConfig} requestConfig
      * @returns {Promise<string>}
      */
     private async signRequest(
-        requestConfig: AxiosRequestConfig
+        requestConfig: AxiosRequestConfig,
+        options: any
     ): Promise<string> {
         let url: string = requestConfig.url;
-        if (requestConfig.params) {
+        const dataIsEncrypted = options.isEncrypted === true;
+
+        // Check if one or more param is set and add it to the url
+        if (
+            requestConfig.params &&
+            Object.keys(requestConfig.params).length > 0
+        ) {
             const params = new Url.URLSearchParams(requestConfig.params);
             url = `${requestConfig.url}?${params.toString()}`;
         }
@@ -226,7 +297,12 @@ export default class ApiAdapter {
         // serialize the data
         let data: string = "\n\n";
         const appendDataWhitelist = ["POST", "PUT", "DELETE"];
-        if (appendDataWhitelist.some(item => item === requestConfig.method)) {
+        if (dataIsEncrypted === true) {
+            // when encrypted we pad the raw data
+            data = `\n\n${requestConfig.data}`;
+        } else if (
+            appendDataWhitelist.some(item => item === requestConfig.method)
+        ) {
             data = `\n\n${JSON.stringify(requestConfig.data)}`;
         }
 
@@ -288,12 +364,15 @@ export default class ApiAdapter {
         // generate the full template
         const template: string = `${response.status}\n${headers}\n\n${data}`;
 
+        // response verification is disabled
+        return true;
+
         // verify the string and return results
-        return await verifyString(
-            template,
-            this.Session.serverPublicKey,
-            response.headers["x-bunq-server-signature"]
-        );
+        // return await verifyString(
+        //     template,
+        //     this.Session.serverPublicKey,
+        //     response.headers["x-bunq-server-signature"]
+        // );
     }
 
     /**
@@ -304,7 +383,8 @@ export default class ApiAdapter {
         const date: Date = new Date();
         return {
             ...DEFAULT_HEADERS,
-            "X-Bunq-Client-Request-Id": date.getTime() + date.getMilliseconds(),
+            "X-Bunq-Client-Request-Id":
+                date.getTime() + date.getMilliseconds() + Math.random(),
             "X-Bunq-Geolocation": this.geoLocation,
             "X-Bunq-Language": this.language,
             "X-Bunq-Region": this.region,

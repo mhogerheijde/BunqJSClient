@@ -2,7 +2,8 @@ import ApiAdapter from "../ApiAdapter";
 import Session from "../Session";
 import ApiEndpointInterface from "../Interfaces/ApiEndpointInterface";
 
-export default class AttachementContent implements ApiEndpointInterface {
+export default class CustomerStatementExportContent
+    implements ApiEndpointInterface {
     ApiAdapter: ApiAdapter;
     Session: Session;
 
@@ -17,17 +18,22 @@ export default class AttachementContent implements ApiEndpointInterface {
     /**
      *
      * @param options
-     * @returns {Promise<any>}
+     * @returns {Promise<Blob>}
      */
-    public async get(attachmendUUID: string, options: any = { base64: true }) {
+    public async list(
+        userId: number,
+        accountId: number,
+        customerStatementId: number,
+        options: any = {}
+    ): Promise<Blob> {
         const limiter = this.ApiAdapter.RequestLimitFactory.create(
-            "/attachment-public/content",
-            "GET"
+            "/customer-statement-export/content",
+            "LIST"
         );
 
         const response = await limiter.run(async () =>
             this.ApiAdapter.get(
-                `/v1/attachment-public/${attachmendUUID}/content`,
+                `/v1/user/${userId}/monetary-account/${accountId}/customer-statement/${customerStatementId}/content`,
                 {},
                 {
                     axiosOptions: {
@@ -37,17 +43,6 @@ export default class AttachementContent implements ApiEndpointInterface {
             )
         );
 
-        // return data as base64
-        if (options.base64 === true) {
-            return new Promise(resolve => {
-                // create a new filereader and transform response blob data into a base64 url
-                const reader = new FileReader();
-                reader.readAsDataURL(response);
-                reader.onload = () => resolve(reader.result);
-            });
-        }
-
-        // return raw respone image
         return response;
     }
 }
